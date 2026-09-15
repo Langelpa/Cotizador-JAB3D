@@ -5,46 +5,72 @@ import math
 import os
 from PIL import Image
 
-# --- CONFIGURACIÓN DE LA PÁGINA ---
-# Cambiamos a wide para aprovechar la pantalla en PC, pero centrado con CSS
-st.set_page_config(page_title="JAB 3D - Cotizador", page_icon="🖨️", layout="centered")
+# --- RUTAS ABSOLUTAS (Soluciona el problema de la imagen) ---
+# Esto obliga a Python a buscar en la misma carpeta exacta donde está este archivo app.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_PNG = os.path.join(BASE_DIR, "Jab3d.png")
+LOGO_JPG = os.path.join(BASE_DIR, "Jab3d.jpg")
 
-# --- INYECCIÓN DE CSS (EL ESTILO OLED DE JAB 3D) ---
+def obtener_ruta_logo():
+    if os.path.exists(LOGO_PNG):
+        return LOGO_PNG
+    elif os.path.exists(LOGO_JPG):
+        return LOGO_JPG
+    return None
+
+ruta_logo = obtener_ruta_logo()
+
+# --- CONFIGURACIÓN DE LA PÁGINA Y FAVICON ---
+# Cambiamos el ícono de la impresora por TU LOGO
+try:
+    icono_tab = Image.open(ruta_logo) if ruta_logo else "⚙️"
+except Exception:
+    icono_tab = "⚙️"
+
+st.set_page_config(page_title="JAB 3D - Cotizador", page_icon=icono_tab, layout="centered")
+
+# --- INYECCIÓN DE CSS (ESTILO OLED FORZADO) ---
 st.markdown("""
     <style>
     /* Fondo negro puro OLED */
     .stApp {
         background-color: #000000;
     }
-    /* Estilo de los textos normales */
-    p, div, span, label {
+    /* Color blanco para textos base */
+    p, span, label {
         color: #FFFFFF !important;
     }
-    /* Estilo de las cajas de texto (Gris oscuro) */
-    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
+    /* Estilo de las cajas de texto (Gris carbón) */
+    .stTextInput input, .stNumberInput input {
+        background-color: #151515 !important;
+        color: #FDF23A !important;
+        border: 1px solid #333333 !important;
+        border-radius: 5px !important;
+    }
+    /* Estilo de la caja de selección (Dropdown) */
+    div[data-baseweb="select"] > div {
         background-color: #151515 !important;
         color: #FDF23A !important;
         border: 1px solid #333333 !important;
     }
-    /* Colores personalizados JAB 3D para etiquetas */
-    .label-blue { color: #4BA1FF; font-weight: bold; font-size: 1.1em; }
-    .label-red { color: #FF4B4B; font-weight: bold; font-size: 1.1em; }
-    .label-green { color: #2ECC71; font-weight: bold; font-size: 1.1em; }
-    .label-yellow { color: #FDF23A; font-weight: bold; font-size: 1.1em; }
-    
-    /* Botón gigante amarillo */
-    [data-testid="baseButton-primary"] {
+    /* Forzar color Amarillo JAB 3D al Botón Primario (Quitando el rojo por defecto) */
+    button[kind="primary"] {
         background-color: #FDF23A !important;
         color: #000000 !important;
         font-weight: bold !important;
-        font-size: 1.2em !important;
-        border: none !important;
+        font-size: 18px !important;
+        border: 2px solid #FDF23A !important;
+        border-radius: 8px !important;
         padding: 15px !important;
     }
-    [data-testid="baseButton-secondary"] {
-        background-color: #333333 !important;
-        color: #888888 !important;
-        font-weight: bold !important;
+    button[kind="primary"]:hover {
+        background-color: #D9CF32 !important;
+        border-color: #D9CF32 !important;
+        color: #000000 !important;
+    }
+    /* Color para los números del tablero financiero */
+    [data-testid="stMetricValue"] {
+        color: #FDF23A !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -71,7 +97,6 @@ def parsear_tiempo(texto_tiempo):
 
 def calcular_totales(tiempo_str, gramos, piezas, material, costo_manual, aplicar_iva):
     horas = parsear_tiempo(tiempo_str)
-    
     if horas == 0 or gramos == 0 or piezas == 0:
         return None
         
@@ -113,11 +138,9 @@ def calcular_totales(tiempo_str, gramos, piezas, material, costo_manual, aplicar
     gastos_unitario = costo_luz + costo_desgaste + costo_material
     costo_error_unitario = gastos_unitario * margen_error
     precio_neto_unitario = gastos_unitario + costo_error_unitario
-    
     precio_unitario_bruto = precio_neto_unitario * margen_ganancia
     
     tasa_iva = 0.16 if aplicar_iva else 0.0
-    
     total_bruto = (precio_unitario_bruto * piezas) * (1 + tasa_iva)
     total_redondeado = math.ceil(total_bruto / 5.0) * 5.0
     
@@ -146,14 +169,14 @@ def generar_pdf(cliente, proyecto, material, piezas, dict_totales):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
-    
     pdf.set_fill_color(26, 26, 26) 
     pdf.rect(0, 0, 210, 35, 'F')
     
-    if os.path.exists("Jab3d.png"):
-        pdf.image("Jab3d.png", x=15, y=5, w=25)
-    elif os.path.exists("Jab3d.jpg"):
-        pdf.image("Jab3d.jpg", x=15, y=5, w=25)
+    if ruta_logo:
+        try:
+            pdf.image(ruta_logo, x=15, y=5, w=25)
+        except Exception:
+            pass 
         
     pdf.set_y(10)
     pdf.set_font('Arial', 'B', 22)
@@ -245,31 +268,30 @@ def generar_pdf(cliente, proyecto, material, piezas, dict_totales):
 # --- INTERFAZ WEB (STREAMLIT) ---
 col1, col2, col3 = st.columns([1, 1.5, 1])
 with col2:
-    if os.path.exists("Jab3d.png"):
-        st.image("Jab3d.png", use_container_width=True)
-    elif os.path.exists("Jab3d.jpg"):
-        st.image("Jab3d.jpg", use_container_width=True)
+    if ruta_logo:
+        st.image(ruta_logo, use_container_width=True)
 
 st.markdown("<h2 style='text-align: center; color: #FDF23A; margin-bottom: 30px;'>COTIZADOR WEB</h2>", unsafe_allow_html=True)
 
-st.markdown("<div class='label-blue'>Cliente:</div>", unsafe_allow_html=True)
+# Usamos HTML In-line para forzar el color de las etiquetas
+st.markdown("<div style='color: #4BA1FF; font-weight: bold; font-size: 1.1em; margin-bottom: 5px;'>Cliente:</div>", unsafe_allow_html=True)
 cliente = st.text_input("Cliente", label_visibility="collapsed")
 
-st.markdown("<div class='label-red'>Descripción del Producto(s):</div>", unsafe_allow_html=True)
+st.markdown("<div style='color: #FF4B4B; font-weight: bold; font-size: 1.1em; margin-bottom: 5px;'>Descripción del Producto(s):</div>", unsafe_allow_html=True)
 proyecto = st.text_input("Descripción", label_visibility="collapsed")
 
-st.markdown("<div class='label-green'>Tiempo (Ej. 3.5 o 90m o 2h30m):</div>", unsafe_allow_html=True)
+st.markdown("<div style='color: #2ECC71; font-weight: bold; font-size: 1.1em; margin-bottom: 5px;'>Tiempo (Ej. 3.5 o 90m o 2h30m):</div>", unsafe_allow_html=True)
 tiempo_str = st.text_input("Tiempo", value="0", label_visibility="collapsed")
 
 col_a, col_b = st.columns(2)
 with col_a:
-    st.markdown("<div class='label-yellow'>Peso del material (g):</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color: #FDF23A; font-weight: bold; font-size: 1.1em; margin-bottom: 5px;'>Peso del material (g):</div>", unsafe_allow_html=True)
     gramos = st.number_input("Peso", min_value=0.0, value=0.0, step=1.0, label_visibility="collapsed")
 with col_b:
-    st.markdown("<div class='label-blue'>Cantidad de productos:</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color: #4BA1FF; font-weight: bold; font-size: 1.1em; margin-bottom: 5px;'>Cantidad de productos:</div>", unsafe_allow_html=True)
     piezas = st.number_input("Cantidad", min_value=1, value=1, step=1, label_visibility="collapsed")
 
-st.markdown("<div class='label-red'>Material Principal:</div>", unsafe_allow_html=True)
+st.markdown("<div style='color: #FF4B4B; font-weight: bold; font-size: 1.1em; margin-bottom: 5px;'>Material Principal:</div>", unsafe_allow_html=True)
 opciones_mat = [
     "PLA / PETG Estándar ($300/kg)",
     "PLA PRO / Seda ($350/kg)",
@@ -283,7 +305,7 @@ material = st.selectbox("Material", opciones_mat, label_visibility="collapsed")
 
 costo_manual = 0.0
 if material == "Costo Variable (Manual)":
-    st.markdown("<div class='label-yellow'>Precio de 1kg ($):</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color: #FDF23A; font-weight: bold; font-size: 1.1em; margin-bottom: 5px;'>Precio de 1kg ($):</div>", unsafe_allow_html=True)
     costo_manual = st.number_input("Precio Manual", min_value=0.0, value=300.0, step=10.0, label_visibility="collapsed")
 
 aplicar_iva = st.checkbox("Aplicar IVA (16%)", value=False)
@@ -302,7 +324,7 @@ if totales:
     texto_iva = "c/ IVA" if totales['tasa_iva'] > 0 else "s/ IVA"
     st.markdown(f"<h1 style='text-align: center; color: #2ECC71;'>PRECIO FINAL ({texto_iva}): ${totales['total']:,.2f}</h1>", unsafe_allow_html=True)
     
-    # Lógica del botón visible:
+    # Lógica del botón de PDF (Siempre visible, pero requiere datos)
     if cliente and proyecto:
         nombre_mat_limpio = "Material de Ingeniería Custom" if material == "Costo Variable (Manual)" else material.split(" ($")[0]
         pdf_bytes = generar_pdf(cliente, proyecto, nombre_mat_limpio, piezas, totales)
@@ -317,7 +339,6 @@ if totales:
             use_container_width=True
         )
     else:
-        st.button("⚠️ INGRESA CLIENTE Y PRODUCTO PARA GENERAR EL PDF", disabled=True, use_container_width=True)
+        st.button("⚠️ INGRESA CLIENTE Y PRODUCTO PARA DESCARGAR PDF", disabled=True, type="primary", use_container_width=True)
 else:
     st.markdown("<h4 style='text-align: center; color: #888888;'>Ingresa el tiempo y el peso para calcular...</h4>", unsafe_allow_html=True)
-    st.button("ESPERANDO DATOS...", disabled=True, use_container_width=True)
